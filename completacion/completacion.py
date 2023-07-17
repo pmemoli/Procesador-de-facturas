@@ -32,8 +32,6 @@ def cdf(t):
 # Invoice final a llenar
 invoice_final = pd.read_csv('2023-06-26-invoice_numbers-final.csv')
 
-# 11966415.pdf, 2021-01-20_689.pdf, 2023-02-21_4480.pdf
-
 def llenar_invoice(path_df):    
     invoice_df = pd.read_csv(path_df)
 
@@ -50,11 +48,11 @@ def llenar_invoice(path_df):
         # Estimacion "default", se queda con lo de ocr
         estimacion = costo_prof
 
-        if costo_prof > 100000:
-            print(path)
+        if costo_prof != 0 and costo_prof < 100:
+            print(path, costo_prof, costo_total, p_valor)
 
         # Estimacion por mediana total
-        if costo_prof == 0 and costo_total == -1:
+        if costo_prof == 0 and abs(costo_total) < 40:
             estimacion = median_tot
 
         # Estimacion por modelo
@@ -65,13 +63,14 @@ def llenar_invoice(path_df):
                 estimacion = median_neg
 
         # Test de hipotesis
-        elif costo_total > 0 and p_valor < 0.0001:
+        elif costo_total > 0 and p_valor < 0.0005:
             estimacion = prediccion_modelo
 
         costo_prof_est.append(estimacion)
 
         if estimacion != costo_prof:
             cantidad_modificada += 1
+
 
     df_estimaciones = pd.DataFrame()
     df_estimaciones['Path'] = invoice_df['path']
@@ -86,7 +85,7 @@ def llenar_invoice(path_df):
     invoices_perdidas = []
     estimaciones_perdidas = []
     for index, row in df_estimaciones.iterrows():
-        invoice_df = str(row['Invoice Number']).upper().replace(' ', '')
+        invoice_df = str(row['Invoice Number']).upper().replace(' ', '').replace('(', '').replace(')', '')
         estimacion_df = row['Total Charged']
         path_df = row['Path']
 
@@ -110,7 +109,7 @@ def llenar_invoice(path_df):
 
     failed = []
     for index, row in estimaciones_perdidas_df.iterrows():
-        invoice_df = row['Invoice Number'].upper().replace(' ', '')
+        invoice_df = row['Invoice Number'].upper().replace(' ', '').replace('(', '').replace(')', '')
         estimacion_df = row['Total Charged']
         path_df = row['Path']
 
@@ -171,8 +170,14 @@ porcentaje_reestimado = 100 * round(cantidad_modificada / cantidad_total, 2)
 porcentaje_no_asociado = 100 * round(perdidas / cantidad_total, 2)
 
 print(f'\nUn {porcentaje_reestimado} % de valores ({cantidad_modificada} de {cantidad_total}) fueron sospechosos y se re-estimaron')
-print(f'Un {porcentaje_no_asociado} % de invoices ({perdidas} de {cantidad_total}) no se lograron asociar\n')
+print(f'Un {porcentaje_no_asociado} % de invoices de los dataframes ({perdidas} de {cantidad_total}) no se lograron asociar')
 
 # Las que no se pudieron rescatar se estiman con la mediana
+cantidad_invoice_final = len(invoice_final['Total Charged'])
+perdidas_final = sum(invoice_final['Total Charged'].isna())
+porcentaje_perdido = 100 * round(perdidas_final / cantidad_invoice_final, 2)
+
+print(f'Un {porcentaje_perdido} % de invoices finales ({perdidas_final} de {cantidad_invoice_final}) no se lograron asociar\n')
+
 invoice_final['Total Charged'].fillna(value=median_tot, inplace=True)
 invoice_final.to_csv('invoice_final_completado.csv')

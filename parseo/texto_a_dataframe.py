@@ -20,7 +20,10 @@ def completar_puntos(string):
         return string.replace(',', '', 1).replace(',', '.', 1)
     
     elif string.count(',') == 1:
-        return string.replace(',', '')
+        if len(string) > 2 and string[-3] == ',':
+            return string.replace(',', '.')
+        else:
+            return string.replace(',', '')
     
     else:
         return string
@@ -108,17 +111,18 @@ def costo_total_parse(factura_string):
 
 # Parsea el costo profesional de una factura
 def costo_prof_parse(factura_string):    
-    #print(factura_string)
-
-   # Obtiene las filas
+    # Obtiene las filas
     filas = [['items', 'horas', 'precio_por_hora', 'total']]
 
-    try:
-        texto_relevante = factura_string[factura_string.index('Total') + 5:]
-        texto_relevante = '\n' + texto_relevante
+    # try:
+    #     texto_relevante = factura_string[factura_string.index('Total') + 5:]
+    #     texto_relevante = '\n' + texto_relevante
+    #     print(texto_relevante)
 
-    except:  # Los totales estan tapados. Ver como trabajar el caso donde un total esta tapado
-        texto_relevante = factura_string
+    # except:  # Los totales estan tapados. Ver como trabajar el caso donde un total esta tapado
+    #     texto_relevante = factura_string
+
+    texto_relevante = factura_string
 
     # Regex para filas que no tienen nada especial
     matches_limpios = re.findall(r"\n((?:[ a-zA-Z-].+\n){1,2})([\d.]+)\n\$([-\d,.]+)\n\$([-\d,.]+)", texto_relevante)
@@ -195,9 +199,12 @@ def costo_prof_parse(factura_string):
     return costo_prof
 
 # Parsea una factura individual
-def parseo_factura(raw_parse, path, print=False):
+def parseo_factura(raw_parse, path, print_res=False):
     string_parse = '\n'.join(map(lambda x:str(x[1][0]), raw_parse))
     string_parse = '\n' + string_parse
+
+    if print_res:
+        print(string_parse)
 
     # Invoice
     invoice = invoice_parse(string_parse, path)
@@ -215,16 +222,15 @@ def parseo_factura(raw_parse, path, print=False):
         print(path)
         costo_prof = 0
 
-    if print:
-        print(f'Invoice: {invoice}')
-        print(f'Invoice: {invoice}')
+    if print_res:
+        print(f'\nInvoice: {invoice}')
         print(f'Costo Total: {costo_total}')
-
+        print(f'Costo Profesional: {costo_prof}')
 
     return [invoice, costo_prof, costo_total]
 
 # Parsea los invoices y los manda a un dataframe
-def parse_all(nombre_df, nombre_joblib, test_paths=None, print=False):
+def parse_all(nombre_df, nombre_joblib, test_paths=None, print_res=False):
     print(f'Parseando {nombre_joblib}...')
 
     datos_parseados = {
@@ -254,29 +260,29 @@ def parse_all(nombre_df, nombre_joblib, test_paths=None, print=False):
 
     errores = 0
     for i in indices_a_parsear:
-        if print:
+        if print_res:
             print(f'\nParseando {pathes[i]}...')
 
-        invoice, costo_prof, costo_total = parseo_factura(raw_parse_strings[i], pathes[i], print)
+        invoice, costo_prof, costo_total = parseo_factura(raw_parse_strings[i], pathes[i], print_res)
         datos_parseados['invoice'].append(invoice)
         datos_parseados['costo_prof'].append(costo_prof)
         datos_parseados['costo_total'].append(costo_total)
         
 
-    print(f'\nHubo {errores} errores')
+    print(f'Hubo {errores} errores\n')
 
     df_parsed = pd.DataFrame(datos_parseados)
 
     df_parsed.to_csv(f'dataframes/{nombre_df}.csv')
 
 # Para testeo
-#paths_a_testear = ['2021-01-20_689.pdf']
-#subset_paths = [paths_a_testear[0]]
-#parse_all('test', 'ocr_img_0-99.joblib', subset_paths)
+# paths_a_testear = ['Invoice (862).pdf', '2022-11-19_6452.pdf']
+# subset_paths = [paths_a_testear[0]]
+# parse_all('test', 'ocr_img_5300-5399.joblib', subset_paths, print_res=True)
 
 # Corre el parseo para todos los joblist de la carpeta ocr_crudo
 ocr_paths = os.listdir('ocr_crudo')
 ocr_paths = filter(lambda x : '.joblib' in x, ocr_paths)
 
 for path in ocr_paths:
-    parse_all(path, path)
+   parse_all(path, path)
