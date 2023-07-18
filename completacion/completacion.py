@@ -31,6 +31,7 @@ def cdf(t):
 
 # Invoice final a llenar
 invoice_final = pd.read_csv('2023-06-26-invoice_numbers-final.csv')
+invoice_final['Path'] = None
 
 def llenar_invoice(path_df):    
     invoice_df = pd.read_csv(path_df)
@@ -48,29 +49,28 @@ def llenar_invoice(path_df):
         # Estimacion "default", se queda con lo de ocr
         estimacion = costo_prof
 
-        if costo_prof != 0 and costo_prof < 100:
-            print(path, costo_prof, costo_total, p_valor)
+        # if costo_prof != 0 and costo_prof < 130:
+        #     print(path, costo_prof, costo_total, p_valor)
 
         # Estimacion por mediana total
         if costo_prof == 0 and abs(costo_total) < 40:
             estimacion = median_tot
 
         # Estimacion por modelo
-        elif abs(costo_prof) < 15 and costo_total != -1:
+        elif abs(costo_prof) < 30 and costo_total != -1:
             if costo_total > 0:
                 estimacion = prediccion_modelo
             else:
                 estimacion = median_neg
 
         # Test de hipotesis
-        elif costo_total > 0 and p_valor < 0.0005:
+        elif costo_total > 0 and p_valor < 0.0001:
             estimacion = prediccion_modelo
 
         costo_prof_est.append(estimacion)
 
         if estimacion != costo_prof:
             cantidad_modificada += 1
-
 
     df_estimaciones = pd.DataFrame()
     df_estimaciones['Path'] = invoice_df['path']
@@ -80,10 +80,7 @@ def llenar_invoice(path_df):
     # Agregado al dataframe invoice final
     completed = 0
 
-    estimaciones_perdidas_df = pd.DataFrame()
-    paths_perdidas = []
-    invoices_perdidas = []
-    estimaciones_perdidas = []
+    failed_primera_it = []
     for index, row in df_estimaciones.iterrows():
         invoice_df = str(row['Invoice Number']).upper().replace(' ', '').replace('(', '').replace(')', '')
         estimacion_df = row['Total Charged']
@@ -92,24 +89,20 @@ def llenar_invoice(path_df):
         final_invoice_pos = invoice_final['Invoice Number'] == invoice_df
         if sum(final_invoice_pos) != 0:
             invoice_final.loc[final_invoice_pos, 'Total Charged'] = estimacion_df
+            invoice_final.loc[final_invoice_pos, 'Path'] = path_df
             completed += 1
+            failed_primera_it.append(False)
 
         # No se encontro el invoice, se busca salvarlo
         else:
-            paths_perdidas.append(path_df)
-            invoices_perdidas.append(invoice_df)
-            estimaciones_perdidas.append(estimacion_df)
+            failed_primera_it.append(True)
 
-    estimaciones_perdidas_df['Path'] = paths_perdidas
-    estimaciones_perdidas_df['Invoice Number'] = invoices_perdidas
-    estimaciones_perdidas_df['Total Charged'] = estimaciones_perdidas
+    estimaciones_perdidas_df = df_estimaciones[failed_primera_it]
 
-    # Se intenta rescatar todas las invoices que se puedan
-    salvados = 0
-
-    failed = []
+    # Se intenta rescatar todas las invoices que se puedan viendo contenciones
+    failed_segunda_it = []
     for index, row in estimaciones_perdidas_df.iterrows():
-        invoice_df = row['Invoice Number'].upper().replace(' ', '').replace('(', '').replace(')', '')
+        invoice_df = str(row['Invoice Number']).upper().replace(' ', '').replace('(', '').replace(')', '')
         estimacion_df = row['Total Charged']
         path_df = row['Path']
 
@@ -117,20 +110,21 @@ def llenar_invoice(path_df):
         contains_invoice = invoice_final['Invoice Number'].str.contains(invoice_df)
         filtered_df = invoice_final[contains_invoice & has_nan]
 
-        if not filtered_df.empty and len(filtered_df.index) == 1:
-            invoice = filtered_df['Invoice Number'].loc(0)
+        if len(filtered_df.index) == 1:
+            invoice = filtered_df['Invoice Number'].iloc[0]
             invoice_final.loc[invoice_final['Invoice Number'] == invoice, 'Total Charged'] = estimacion_df
-            salvados += 1
-            failed.append(False)
+            invoice_final.loc[invoice_final['Invoice Number'] == invoice, 'Path'] = path_df
+            completed += 1
+            failed_segunda_it.append(False)
 
         else:
-            failed.append(True)
+            failed_segunda_it.append(True)
 
     # Repite lo anterior sin el primer elemento del caracter (confusion letra por numero)
-    estimaciones_perdidas_restantes_df = estimaciones_perdidas_df[failed]
+    estimaciones_perdidas_restantes_df = estimaciones_perdidas_df[failed_segunda_it]
 
     for index, row in estimaciones_perdidas_restantes_df.iterrows():
-        invoice_df = row['Invoice Number'].upper().replace(' ', '')[1:]
+        invoice_df = str(row['Invoice Number']).upper().replace(' ', '').replace('(', '').replace(')', '')[1:]
         estimacion_df = row['Total Charged']
         path_df = row['Path']
 
@@ -138,13 +132,14 @@ def llenar_invoice(path_df):
         contains_invoice = invoice_final['Invoice Number'].str.contains(invoice_df)
         filtered_df = invoice_final[contains_invoice & has_nan]
 
-        if not filtered_df.empty and len(filtered_df.index) == 1:
-            invoice = filtered_df['Invoice Number'].loc(0)
+        if len(filtered_df.index) == 1:
+            invoice = filtered_df['Invoice Number'].iloc[0]
             invoice_final.loc[invoice_final['Invoice Number'] == invoice, 'Total Charged'] = estimacion_df
-            salvados += 1
+            invoice_final.loc[invoice_final['Invoice Number'] == invoice, 'Path'] = path_df
+            completed += 1
+        
 
-    perdidas = len(df_estimaciones) - (completed + salvados)
-    completed += salvados
+    perdidas = len(df_estimaciones) - completed
 
     return [cantidad_modificada, perdidas, len(costo_prof_est)]
 
@@ -172,6 +167,14 @@ porcentaje_no_asociado = 100 * round(perdidas / cantidad_total, 2)
 print(f'\nUn {porcentaje_reestimado} % de valores ({cantidad_modificada} de {cantidad_total}) fueron sospechosos y se re-estimaron')
 print(f'Un {porcentaje_no_asociado} % de invoices de los dataframes ({perdidas} de {cantidad_total}) no se lograron asociar')
 
+for path in paths:
+    print(f'Completando los datos de {path}')
+    cant_mod_ind, perdidas_ind, cant_total_ind = llenar_invoice(f'dataframes/{path}')
+
+for path in paths:
+    print(f'Completando los datos de {path}')
+    cant_mod_ind, perdidas_ind, cant_total_ind = llenar_invoice(f'dataframes/{path}')
+
 # Las que no se pudieron rescatar se estiman con la mediana
 cantidad_invoice_final = len(invoice_final['Total Charged'])
 perdidas_final = sum(invoice_final['Total Charged'].isna())
@@ -180,4 +183,6 @@ porcentaje_perdido = 100 * round(perdidas_final / cantidad_invoice_final, 2)
 print(f'Un {porcentaje_perdido} % de invoices finales ({perdidas_final} de {cantidad_invoice_final}) no se lograron asociar\n')
 
 invoice_final['Total Charged'].fillna(value=median_tot, inplace=True)
-invoice_final.to_csv('invoice_final_completado.csv')
+invoice_final.to_csv('invoice_final_completado.csv', index=False)
+
+# 248266849.pdf, A99436936.pdf, Invoice (3221).pdf

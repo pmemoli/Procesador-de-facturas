@@ -132,7 +132,7 @@ def costo_prof_parse(factura_string):
     profesiones = [
         'Engineer', 'Scheduler', 'Manager', 'Principal', 'Designer', 'Specialist',
         'Administrative', 'Supervisor', 'Associate', 'Drafter', 'Consultant', 'Director',
-        'Analyst'
+        'Analyst', 'Consultant', 'Contractor', 
     ]
 
     profesiones_regex = '|'.join(profesiones)
@@ -150,8 +150,9 @@ def costo_prof_parse(factura_string):
 
     rows_prof = df[(contiene_apellido_comun | contiene_profesion | horas_no_default) & no_tiene_antiprof]
 
+    # Calcula finalmente la suma de costo de profesionales
     costo_prof = sum(rows_prof['total'])
-
+    
     return costo_prof
 
 # Parsea una factura individual

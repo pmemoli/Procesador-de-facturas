@@ -68,22 +68,23 @@ for partition in partitions:
         ocr_documentos = []
         cantidad_trabajada = partition[0] - 1
         for part_index in partition:
-            img_pags = pdf_to_images('imagenes/' + path_images[part_index])
+            if part_index < len(path_images):
+                img_pags = pdf_to_images('imagenes/' + path_images[part_index])
 
-            ocr_pags = []
-            for img in img_pags:
-                ocr_pags.append(apply_paddleocr(img, plot=False)[0])
+                ocr_pags = []
+                for img in img_pags:
+                    ocr_pags.append(apply_paddleocr(img, plot=False)[0])
 
-            ocr_documento = []
-            for pag in ocr_pags:
-                for item in pag:
-                    ocr_documento.append(item)
+                ocr_documento = []
+                for pag in ocr_pags:
+                    for item in pag:
+                        ocr_documento.append(item)
 
-            ocr_documentos.append({'path': path_images[part_index], 'text': ocr_documento})
+                ocr_documentos.append({'path': path_images[part_index], 'text': ocr_documento})
 
-            cantidad_trabajada += 1
+                cantidad_trabajada += 1
 
-            print(f'\nTerminado {cantidad_trabajada} de {len(path_images)}\n')
+                print(f'\nTerminado {cantidad_trabajada} de {len(path_images)}\n')
 
         dump(ocr_documentos, f'ocr_crudo/ocr_img_{partition[0]}-{partition[-1]}.joblib')
 

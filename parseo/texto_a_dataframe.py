@@ -3,6 +3,10 @@ import re
 import pandas as pd
 from collections import Counter
 import os
+import warnings
+from pandas.core.common import SettingWithCopyWarning
+
+warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
 # Lectura top 500 nombres comunes
 top_nombres_df = pd.DataFrame(pd.read_excel('top_names.xlsx'))
@@ -12,29 +16,56 @@ top_nombres_df = top_nombres_df.drop(top_nombres_df.index[1])
 
 top_850_apellidos = '|'.join([r'\b' + re.escape(surname) + r'\b' for surname in top_nombres_df['SURNAME'][:850]])
 
-def completar_puntos(string):
-    if string.count('.') == 2:
-        return string.replace('.', '', 1)
+def completar_entero(str):
+    try:
+        limpiado_facil = float(str)
+        return limpiado_facil
+    except:
+        pass
+
+    cleaned_s = re.sub("[^0-9]", "", str)
+    if cleaned_s == '':
+        return 1
     
-    elif string.count(',') == 2:
-        return string.replace(',', '', 1).replace(',', '.', 1)
+    return float(cleaned_s)
+
+def completar_float(str, remove_first=True, allow_neg=True):
+    if remove_first:
+        str = str[1:]
     
-    elif string.count(',') == 1:
-        if len(string) > 2 and string[-3] == ',':
-            return string.replace(',', '.')
-        else:
-            return string.replace(',', '')
-    
+    if allow_neg:
+        cleaned_s = re.sub("[^0-9.,-]", "", str)
     else:
-        return string
+        cleaned_s = re.sub("[^0-9.,]", "", str)
+
+    parts = re.split(r'[.,]', cleaned_s)
+
+    # Evalua si la ultima parte es decimal
+    if len(parts[-1]) == 2 or len(parts[-1]) == 1:  
+        decimal = parts.pop(-1)
+    else:
+        decimal = None
+    
+    # El resto de partes representa miles con maybe excepcion del primero
+    whole = "".join(parts)
+
+    if whole == '': # Estaba cortado
+        return float(re.sub("[,.]", "", cleaned_s))
+
+    number = float(whole)
+
+    if decimal is not None:
+        number += float(decimal) / 100
+
+    return number
 
 # Parsea el invoice de una factura
 def invoice_parse(factura_string, path):
     # Patrones ideales
-    invoice_keys = ['inv', 'locator', 'num', 'invoice']
+    invoice_keys = ['inv', 'cator', 'num', 'oice']
 
-    pattern_comp_1 = '(' + '|'.join(re.escape(key) for key in invoice_keys) + ')[: .#]*([a-zA-Z]{0,1}[\d]+?)\n'
-    pattern_comp_2 = '(' + '|'.join(re.escape(key) for key in invoice_keys) + ')[: .#]*\n([a-zA-Z]{0,1}[\d]+?)\n'
+    pattern_comp_1 = '(' + '|'.join(re.escape(key) for key in invoice_keys) + ')[: .#]*([a-zA-Z]{0,1}[\d]+).{0,1}\n'
+    pattern_comp_2 = '\n([:# ])([a-zA-Z]{0,1}\d{6,9}).{0,1}\n'
 
     invoice_regex_1 = re.findall(pattern_comp_1, factura_string, re.IGNORECASE)
     invoice_regex_2 = re.findall(pattern_comp_2, factura_string, re.IGNORECASE)
@@ -53,20 +84,14 @@ def invoice_parse(factura_string, path):
         fallo = True
         
     # Patrones mas irregulares
-    simple_pattern = '\n([:#])([a-zA-Z]*\d{8,9})\n'
-    last_resort_1 = '\n([a-zA-Z]*\d{8,9})\n'
-    last_resort_2 = '\n(.*?)([a-zA-Z]*\d{7,9})\n'
+    last_resort_1 = '\n([a-zA-Z]{0,1}\d{6,9}).{0,1}\n'
+    last_resort_2 = '\n(.*?)([a-zA-Z]{0,1}\d{6,9}).{0,1}\n'
 
-    simple_regex = re.findall(simple_pattern, factura_string, re.IGNORECASE)
     last_resort_regex_1 = re.findall(last_resort_1, factura_string, re.IGNORECASE)
     last_resort_regex_2 = re.findall(last_resort_2, factura_string, re.IGNORECASE)
 
     if fallo:
-        simple_regex = re.findall(simple_pattern, factura_string, re.IGNORECASE)
-        if simple_regex != []:
-            unparsed_inv = simple_regex[0]
-
-        elif last_resort_regex_1 != []:
+        if last_resort_regex_1 != []:
             unparsed_inv = last_resort_regex_1[0]
         
         else:
@@ -87,21 +112,23 @@ def invoice_parse(factura_string, path):
 
     nombre_path = path.replace('.pdf', '')
     casi_igual_al_path = len(nombre_path) == len(invoice) and len(invoice) - common_chars(nombre_path, invoice) <= 2
-    errado_seguro = len(invoice) < 5 or len(invoice) > 10
+    errado_seguro = len(invoice) < 6 or len(invoice) > 10
     
     if casi_igual_al_path or errado_seguro:
-        invoice = nombre_path
+        if re.findall('[a-zA-Z]*\d{6,9}', nombre_path) != [] or invoice == '':
+            invoice = nombre_path
+        # else:
+        #     print(invoice, nombre_path)
 
     return invoice
 
 # Parsea el costo total de una factura
 def costo_total_parse(factura_string):
-    total_regex = re.findall(r'Total:[ ]*[-]*\$[.,\d]+', factura_string, re.IGNORECASE)
+    total_regex = re.findall(r'Total[: -]*\$[.,\d]+', factura_string, re.IGNORECASE)
 
     # Se encontro correctamente el total
     if len(total_regex) != 0: 
-        costo_total = total_regex[0].replace('Total:', '').replace(',', '').replace('$', '').replace(' ', '')
-        costo_total = float(completar_puntos(costo_total))
+        costo_total = float(completar_float(total_regex[0], remove_first=False))
 
     # No se encontro el total, defaultea a -1
     else:
@@ -114,25 +141,18 @@ def costo_prof_parse(factura_string):
     # Obtiene las filas
     filas = [['items', 'horas', 'precio_por_hora', 'total']]
 
-    # try:
-    #     texto_relevante = factura_string[factura_string.index('Total') + 5:]
-    #     texto_relevante = '\n' + texto_relevante
-    #     print(texto_relevante)
-
-    # except:  # Los totales estan tapados. Ver como trabajar el caso donde un total esta tapado
-    #     texto_relevante = factura_string
-
     texto_relevante = factura_string
 
     # Regex para filas que no tienen nada especial
-    matches_limpios = re.findall(r"\n((?:[ a-zA-Z-].+\n){1,2})([\d.]+)\n\$([-\d,.]+)\n\$([-\d,.]+)", texto_relevante)
-    matches_sin_horas = re.findall(r"\n((?:[ a-zA-Z-].+\n){1,2})\$([-\d,.]+)\n\$([-\d,.]+)", texto_relevante)
+    matches_limpios = re.findall(r"\n((?:[ a-zA-Z-].+\n){1,2})([\d.]+)\n([$S5][\d,.]*\d[\d,.]*)\n([$S5][\d,.]*\d[\d,.]*)", texto_relevante)
+    matches_sin_horas = re.findall(r"\n((?:[ a-zA-Z-].+\n){1,2})([$S5][\d,.]*\d[\d,.]*)\n([$S5][\d,.]*\d[\d,.]*)", texto_relevante)
+    matches_sin_por_hora = re.findall(r"\n((?:[ a-zA-Z-].+\n){1,2})([\d.]+)\n([\d,.]*\d[\d,.]*)\n([$S5][\d,.]*\d[\d,.]*)", texto_relevante)
 
     # Regex para filas complicadas
-    matches_hora_shifted = re.findall(r"\n((?:[ a-zA-Z-].+\n){1,2})\$([-\d,.]+)\n([\d,.]+)\n\$([-\d,.]+)", texto_relevante)
-    matches_cero_unico = re.findall(r"\n(0\n)([\d,.]+)\n\$([-\d,.]+)\n\$([-\d,.]+)", texto_relevante)
-    matches_cero_concat = re.findall(r"\n(0 -.+\n)([\d,.]+)\n\$([-\d,.]+)\n\$([-\d,.]+)", texto_relevante)
-    matches_cero_concat_sin_horas = re.findall(r"\n(0 -.+\n)\n\$([-\d,.]+)\n\$([-\d,.]+)", texto_relevante)
+    matches_hora_shifted = re.findall(r"\n((?:[ a-zA-Z-].+\n){1,2})([$S5][\d,.]*\d[\d,.]*)\n([\d,.]+)\n([$S5][\d,.]*\d[\d,.]*)", texto_relevante)
+    matches_cero_unico = re.findall(r"\n(0\n)([\d,.]+)\n([$S5][\d,.]*\d[\d,.]*)\n([$S5][\d,.]*\d[\d,.]*)", texto_relevante)
+    matches_cero_concat = re.findall(r"\n(0 -.+\n)([\d,.]+)\n([$S5][\d,.]*\d[\d,.]*)\n([$S5][\d,.]*\d[\d,.]*)", texto_relevante)
+    matches_cero_concat_sin_horas = re.findall(r"\n(0 -.+\n)\n([$S5][\d,.]*\d[\d,.]*)\n([$S5][\d,.]*\d[\d,.]*)", texto_relevante)
 
     # Append a filas para caso con hora
     matches_limpios.extend(matches_cero_concat)
@@ -140,9 +160,19 @@ def costo_prof_parse(factura_string):
     for match in matches_limpios:
         fila = []
         fila.append(match[0])
-        fila.append(float(completar_puntos(match[1])))
-        fila.append(float(completar_puntos(match[2])))
-        fila.append(float(completar_puntos(match[3])))
+        fila.append(float(completar_entero(match[1])))
+        fila.append(float(completar_float(match[2])))
+        fila.append(float(completar_float(match[3])))
+
+        filas.append(fila)
+
+    # Appens al caso especial sin hora
+    for match in matches_sin_por_hora:
+        fila = []
+        fila.append(match[0])
+        fila.append(float(completar_entero(match[1])))
+        fila.append(float(completar_float(match[2], remove_first=False, allow_neg=False)))
+        fila.append(float(completar_float(match[3])))
 
         filas.append(fila)
 
@@ -152,8 +182,8 @@ def costo_prof_parse(factura_string):
         fila = []
         fila.append(match[0])
         fila.append(1)
-        fila.append(float(completar_puntos(match[1])))
-        fila.append(float(completar_puntos(match[2])))
+        fila.append(float(completar_float(match[1])))
+        fila.append(float(completar_float(match[2])))
 
         filas.append(fila)
 
@@ -161,9 +191,9 @@ def costo_prof_parse(factura_string):
     for match in matches_hora_shifted:
         fila = []
         fila.append(match[0])
-        fila.append(float(completar_puntos(match[2])))
-        fila.append(float(completar_puntos(match[1])))
-        fila.append(float(completar_puntos(match[3])))
+        fila.append(float(completar_entero(match[2])))
+        fila.append(float(completar_float(match[1])))
+        fila.append(float(completar_float(match[3])))
 
         filas.append(fila)
 
@@ -175,7 +205,7 @@ def costo_prof_parse(factura_string):
     profesiones = [
         'Engineer', 'Scheduler', 'Manager', 'Principal', 'Designer', 'Specialist',
         'Administrative', 'Supervisor', 'Associate', 'Drafter', 'Consultant', 'Director',
-        'Analyst'
+        'Analyst', 'Consultant', 'Contractor', 
     ]
 
     profesiones_regex = '|'.join(profesiones)
@@ -192,6 +222,8 @@ def costo_prof_parse(factura_string):
     no_tiene_antiprof = ~df['items'].str.contains(anti_profs_regex, case=False, na=False)
 
     rows_prof = df[(contiene_apellido_comun | contiene_profesion | horas_no_default) & no_tiene_antiprof]
+
+    rows_prof.drop_duplicates(subset=['items', 'total'], keep='first', inplace=True)
 
     # Calcula finalmente la suma de costo de profesionales
     costo_prof = sum(rows_prof['total'])
@@ -216,11 +248,14 @@ def parseo_factura(raw_parse, path, print_res=False):
         costo_total = -1
     
     # Obtiene el costo de profesionales
-    try:
+    if print_res:
         costo_prof = costo_prof_parse(string_parse)
-    except:
-        print(path)
-        costo_prof = 0
+    else:
+        try:
+            costo_prof = costo_prof_parse(string_parse)
+        except:
+            print(path)
+            costo_prof = 0
 
     if print_res:
         print(f'\nInvoice: {invoice}')
@@ -253,6 +288,9 @@ def parse_all(nombre_df, nombre_joblib, test_paths=None, print_res=False):
             if pathes[i] in test_paths:
                 indices_a_parsear.append(i)
 
+        if indices_a_parsear == []:
+            return False
+
         datos_parseados['path'] = test_paths
 
     else:
@@ -275,14 +313,22 @@ def parse_all(nombre_df, nombre_joblib, test_paths=None, print_res=False):
 
     df_parsed.to_csv(f'dataframes/{nombre_df}.csv')
 
+    if test_paths != None:
+        return True
+    else:
+        return False
+
 # Para testeo
-# paths_a_testear = ['Invoice (862).pdf', '2022-11-19_6452.pdf']
-# subset_paths = [paths_a_testear[0]]
-# parse_all('test', 'ocr_img_5300-5399.joblib', subset_paths, print_res=True)
+paths_a_testear = ['Incoming_inv_ParaisurZ996560_587.pdf']
+subset_paths = [paths_a_testear[0]]
+# parse_all('test', 'ocr_img_3800-3899.joblib', subset_paths, print_res=True)
 
 # Corre el parseo para todos los joblist de la carpeta ocr_crudo
 ocr_paths = os.listdir('ocr_crudo')
 ocr_paths = filter(lambda x : '.joblib' in x, ocr_paths)
 
 for path in ocr_paths:
-   parse_all(path, path)
+    finished = parse_all(path, path)#, subset_paths, print_res=True)
+
+    if finished:
+        break
