@@ -81,7 +81,7 @@ Es llevado a cabo por el programa ./reconocimiento/imagen_a_texto.py
 
 - **Input**: Facturas en la carpeta ./reconocimiento/imagenes. Tienen que ser pdfs cuya información está en formato texto.
 
-- **Output**: Archivos .joblib en la carpeta de ./reconocimiento/ocr_crudo. Cada uno contiene una lista de python con el procesado de 100 facturas. Las imagenes se representan en formato ([(Coordenadas texto, texto), ...], path). El primer elemento de la tupla es una lista con las coordenadas de cada bloque de *texto*. La segunda coordenada contiene el path de la factura en ./reconocimiento/imagenes.
+- **Output**: Archivos .joblib en la carpeta de ./reconocimiento/ocr_crudo. Cada uno contiene una lista de python con el procesado de 100 facturas. Las imagenes se representan en formato ([(Coordenadas texto, texto), ...], path). El primer elemento de la tupla es una lista con las coordenadas de cada bloque de *texto* junto con los caracteres que abarca. La segunda coordenada contiene el path de la factura en ./reconocimiento/imagenes.
 
 ### Parseo del texto
 
@@ -116,9 +116,9 @@ El sistema de completación es llevado a cabo por ./completacion.py.
 
 5) Copiar la carpeta *./facturas_imagen/reconocimiento/ocr_crudo* a *./facturas_imagen/parseo*. Luego correr el archivo parseo.py en ese directorio.
 
-6) Copiar la carpeta *./facturas_imagen/dataframes* a *./completacion* y mover los archivos modelo_df.csv y modelo.joblib en *./facturas_texto/modelo* a *./completacion/modelo*. Luego correr *./completacion/completacion.py*
+6) Copiar la carpeta *./facturas_imagen/dataframes* a *./completacion* y mover los archivos modelo_df.csv y modelo.joblib de *./facturas_texto/modelo* a *./completacion/modelo*. Luego correr *./completacion/completacion.py*
 
-Luego de seguir todos los pasos el archivo *./completacion/invoice_final_completado.csv* contiene el csv completado con los números de facturas provistos por la empresa y su respectivo costo en servicios profesionales.
+Tras de seguir todos los pasos, se crea un archivo *./completacion/invoice_final_completado.csv* que contiene el csv completo con los números de facturas provistos por la empresa y su respectivo costo en servicios profesionales.
 
 ## Comentarios
 

@@ -10,8 +10,8 @@ posiblea a partir de un dataframe invoice_df.
 
 Antes de correr la funcion se construye un unico dataframe a partir del parseo de facturas en 
 formatos de tipo texto e imagen. Luego se corre un filtro sobre cada fila para evaluar si
-el dato fue confiable o no y predice a partir del analisis estadistico si no lo fue.
-El filtrado se guarda en modulos/filtro.py.
+el dato fue confiable o no, y predice a partir del analisis estadistico si no lo fue.
+El filtrado se modulariza a modulos/filtro.py.
 '''
 
 # Modelo (regresion por cuantil)
