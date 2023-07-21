@@ -1,17 +1,18 @@
 from joblib import load
 import pandas as pd
 import os
-from modulos.invoice_parse import *
-from modulos.costo_total_parse import *
-from modulos.costo_prof_parse import *
+import modulos.invoice_parse as inv_par
+import modulos.costo_total_parse as tot_par
+import modulos.costo_prof_parse as prof_par
 
 '''
 El parseo se lleva a cabo por la funcion parse_all(nombre_df, nombre_joblib). El programa convierte
-el archivo .joblib "nombre_joblib" en ./ocr_crudo a texto y lo almacena como un dataframe "nombre_df"
-que tiene columnas de numero de factura, costo total y costo profesional respectivamente.
+el archivo .joblib "nombre_joblib" (almacenado en ./ocr_crudo) a texto. Luego lo almacena
+como un dataframe "nombre_df" que tiene columnas de numero de factura, costo total y costo
+profesional respectivamente.
 
 parse_all(nombre_df, nombre_joblib) llama a parseo_factura(raw_parse, path) que toma un
-elemento de la lista almacenada en el archivo joblib junto con su path. Retorna en una tripla
+elemento de la lista almacenada en el archivo joblib junto con su path. Retorna una tripla
 {invoice, costo total, costo profesional} correspondiente a ese elemento. Cada item de la lista
 se parsea por las funciones de invoice_parse(), costo_total_parse() y parseo_factura()
 respectivamente, donde las funciones se almacenan en la carpeta de modulos por su extension.
@@ -27,19 +28,19 @@ def parseo_factura(raw_parse, path, print_res=False):
         print(string_parse)
 
     # Obtiene el numero de factura
-    invoice = invoice_parse(string_parse, path)
+    invoice = inv_par.invoice_parse(string_parse, path)
 
     # Obtiene el costo total
     try:
-        costo_total = costo_total_parse(string_parse)
+        costo_total = tot_par.costo_total_parse(string_parse)
     except:
         costo_total = -1
     
     # Obtiene el costo de profesionales
     if print_res:
-        costo_prof = costo_prof_parse(string_parse)
+        costo_prof = prof_par.costo_prof_parse(string_parse)
     else:
-        costo_prof = costo_prof_parse(string_parse)
+        costo_prof = prof_par.costo_prof_parse(string_parse)
 
     if print_res:
         print(f'\nInvoice: {invoice}')

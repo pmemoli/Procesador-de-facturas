@@ -14,4 +14,4 @@ facturas_imagen/parseo/dataframes/*
 !facturas_imagen/parseo/dataframes/.gitkeep
 
 completacion/dataframes/*
-completacion/dataframes/.gitkeep
+!completacion/dataframes/.gitkeep

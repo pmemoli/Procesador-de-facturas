@@ -8,9 +8,9 @@ import re
 import pandas as pd
 import warnings
 from pandas.core.common import SettingWithCopyWarning
-from .modulos.invoice_parse import *
-from .modulos.costo_total_parse import *
-from .modulos.costo_prof_parse import *
+import modulos.invoice_parse as inv_parse
+import modulos.costo_total_parse as tot_parse
+import modulos.costo_prof_parse as prof_parse
 
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
@@ -31,13 +31,13 @@ def parseo_factura(nombre_factura, print_res=False):
     string_parse = '\n' + '\n'.join(list(map(lambda x:x.extract_text(), reader.pages)))
 
     # Invoice
-    invoice = invoice_parse(string_parse, nombre_factura)
+    invoice = inv_parse.invoice_parse(string_parse, nombre_factura)
 
     # Obtiene el costo total
-    costo_total = costo_total_parse(string_parse)
+    costo_total = tot_parse.costo_total_parse(string_parse)
 
     # Obtiene el costo de profesionales
-    costo_prof = costo_prof_parse(string_parse)
+    costo_prof = prof_parse.costo_prof_parse(string_parse)
 
     if print_res:
         print(f'Invoice: {invoice}')
@@ -55,7 +55,8 @@ def parse_all(nombre_dataframe):
         'costo_total': []
     }
 
-    archivos = os.listdir('images')
+    archivos = os.listdir('facturas')
+    archivos = list(filter(lambda x : '.pdf' in x, archivos))
     datos_parseados['path'] = archivos
 
     # Itera sobre cada factura y la parsea. Se guardan los resultados en el dataframe

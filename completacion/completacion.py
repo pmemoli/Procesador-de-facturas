@@ -1,14 +1,16 @@
 from joblib import load
 import pandas as pd
 import os
-from modulos.filtro import *
+import modulos.filtro as filtro
 
 '''
-La completacion del csv provisto con la empresa de numeros de factura y costos (vacios) se hace
-mediante la funcion llenar_invoice(invoice_df). Toma un dataframe que represente todos los datos
-obtenidos con los sistema de facturas_imagen y facturas_texto.
+El programa completa el csv provisto por la empresa con numeros de factura y costos vacios.
+Lo hace mediante la funcion llenar_invoice(invoice_df) que asocia todos los numeros de factura
+posiblea a partir de un dataframe invoice_df.
 
-La evaluacion de si un dato de invoice_df es confiable o no se almacena en modulos/filtro.py.
+Antes de correr la funcion se construye un unico dataframe a partir del parseo de facturas en 
+formatos de tipo texto e imagen. Luego se corre un filtro sobre cada fila para evaluar si
+el dato fue confiable o no. El filtrado se guarda en modulos/filtro.py.
 '''
 
 # Modelo (regresion por cuantil)
@@ -22,7 +24,7 @@ invoice_final['Path'] = None
 # Completa el csv provisto por la empresa a partir de los datos de invoice_df
 def llenar_invoice(invoice_df):    
     # Aplica las estimaciones para resultados sospechosos
-    costo_prof_est = filtro(invoice_df)
+    costo_prof_est, cantidad_modificada = filtro.filtro(invoice_df)
 
     # Almacena las predicciones en un dataframe df_estimaciones
     df_estimaciones = pd.DataFrame()
@@ -52,7 +54,7 @@ def llenar_invoice(invoice_df):
         else:
             failed_primera_it.append(True)
 
-    print(sum(invoice_final['Total Charged'].isna()))
+    # print(sum(invoice_final['Total Charged'].isna()))
     estimaciones_perdidas_df = df_estimaciones[failed_primera_it]
 
     # Se intenta rescatar todas las invoices que se puedan viendo si hay un unico invoice en 
@@ -105,6 +107,7 @@ cantidad_total = 0
 
 # Y si uno todos los dataframes?
 paths = os.listdir('dataframes')
+paths = list(filter(lambda x : '.csv' in x, paths))
 
 ultimate_df = pd.read_csv(f'modelo/modelo_df.csv')
 
