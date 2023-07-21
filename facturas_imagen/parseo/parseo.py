@@ -100,19 +100,13 @@ def parse_all(nombre_df, nombre_joblib, test_paths=None, print_res=False):
         return True
     else:
         return False
-
-# Para testeo
-# WrightandSons_2022-02-09.pdf, 283339745.pdf, 2023-01-24_2002.pdf
-paths_a_testear = ['Incoming_inv_ParaisurZ996560_7156.pdf']
-subset_paths = [paths_a_testear[0]]
-# parse_all('test', 'ocr_img_4800-4899.joblib', subset_paths, print_res=True)
-
+    
 # Corre el parseo para todos los joblist de la carpeta ocr_crudo
 ocr_paths = os.listdir('ocr_crudo')
 ocr_paths = filter(lambda x : '.joblib' in x, ocr_paths)
 
 for path in ocr_paths:
-    finished = parse_all(path, path)#, subset_paths, print_res=True)
+    finished = parse_all(path, path)
 
     if finished:
         break

@@ -13,7 +13,7 @@ def invoice_parse(factura_string, path, safe=True):
         minimum = '5'
 
     # Patrones ideales
-    invoice_keys = ['inv', 'cator', 'num', 'oice']
+    invoice_keys = ['inv', 'cator', 'num', 'oice', 'ace']
 
     # Hubo cambios aca
     pattern_comp_1 = '(' + '|'.join(re.escape(key) for key in invoice_keys) + ')[: .#]*([a-zA-Z]?\d*[a-zA-Z]?\d+).?\n'

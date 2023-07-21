@@ -10,7 +10,8 @@ posiblea a partir de un dataframe invoice_df.
 
 Antes de correr la funcion se construye un unico dataframe a partir del parseo de facturas en 
 formatos de tipo texto e imagen. Luego se corre un filtro sobre cada fila para evaluar si
-el dato fue confiable o no. El filtrado se guarda en modulos/filtro.py.
+el dato fue confiable o no y predice a partir del analisis estadistico si no lo fue.
+El filtrado se guarda en modulos/filtro.py.
 '''
 
 # Modelo (regresion por cuantil)
@@ -79,23 +80,42 @@ def llenar_invoice(invoice_df):
         else:
             failed_segunda_it.append(True)
 
-    # Repite lo anterior sin el primer elemento del caracter (confusion letra por numero)
+    # Repite lo anterior pero eliminando los primeros dos caracteres o los ultimos dos
     estimaciones_perdidas_restantes_df = estimaciones_perdidas_df[failed_segunda_it]
 
+    inasociadas = []
     for index, row in estimaciones_perdidas_restantes_df.iterrows():
-        invoice_est = str(row['Invoice Number']).upper().replace(' ', '').replace('(', '').replace(')', '')[1:]
-        estimacion_df = row['Total Charged']
-        path_df = row['Path']
+        found = False
 
-        has_nan = invoice_final['Total Charged'].isna()
-        contains_invoice = invoice_final['Invoice Number'].str.contains(invoice_est)
-        filtered_df = invoice_final[contains_invoice & has_nan]
+        for i in range(1, 5):
+            invoice_est = str(row['Invoice Number']).upper().replace(' ', '').replace('(', '').replace(')', '')
+            
+            if i < 3:
+                invoice_est = invoice_est[i:]
+            else:
+                invoice_est = invoice_est[:-(i - 2)]
 
-        if len(filtered_df.index) == 1:
-            invoice = filtered_df['Invoice Number'].iloc[0]
-            invoice_final.loc[invoice_final['Invoice Number'] == invoice, 'Total Charged'] = estimacion_df
-            invoice_final.loc[invoice_final['Invoice Number'] == invoice, 'Path'] = path_df
-            completed += 1
+            if len(invoice_est) < 4:
+                continue
+
+            estimacion_df = row['Total Charged']
+            path_df = row['Path']
+
+            has_nan = invoice_final['Total Charged'].isna()
+            contains_invoice = invoice_final['Invoice Number'].str.contains(invoice_est)
+            filtered_df = invoice_final[contains_invoice & has_nan]
+
+            if len(filtered_df.index) == 1:
+                invoice = filtered_df['Invoice Number'].iloc[0]
+                invoice_final.loc[invoice_final['Invoice Number'] == invoice, 'Total Charged'] = estimacion_df
+                invoice_final.loc[invoice_final['Invoice Number'] == invoice, 'Path'] = path_df
+                completed += 1
+
+                found = True
+
+                break
+
+            inasociadas.append(found)
 
     perdidas = len(df_estimaciones) - completed
 
@@ -128,8 +148,8 @@ print(f'\nUn {porcentaje_reestimado} % de valores ({cantidad_modificada} de {can
 print(f'Un {porcentaje_no_asociado} % de invoices de los dataframes ({perdidas} de {cantidad_total}) no se lograron asociar')
 
 # Intenta rellenar los invoices que no se pudieron asociar.
-for i in range(3):
-    print('Rellenando para evitar perdidos...')
+for i in range(4):
+    print('\nRellenando para evitar perdidos...')
     llenar_invoice(ultimate_df)
 
 # Las que no se pudieron rescatar se estiman con la mediana
